@@ -62,9 +62,8 @@ class Dataset(torch.utils.data.Dataset):
         path = ds.get_path(idx)
         orig_keypoints = ds.get_kps(idx)
         kptmp = orig_keypoints.copy()
-
         cropped = cv2.resize(orig_img, (self.input_res, self.input_res))
-
+        cv2.imshow("crop", cropped)
         for i in range(np.shape(orig_keypoints)[1]):
             if orig_keypoints[0, i, 0] > 0:
                 orig_keypoints[0, i, 0] = int(orig_keypoints[0, i, 0] / orig_img.shape[1] * self.input_res)
@@ -77,31 +76,52 @@ class Dataset(torch.utils.data.Dataset):
         scale = max(height, width)/200
 
         aug_rot = 0
-        
-        aug_rot = (np.random.random() * 2 - 1) * 30.
+        if np.random.randint(2) == 0:
+            aug_rot = (np.random.random() * 2 - 1) * 30.
         aug_scale = np.random.random() * (1.25 - 0.75) + 0.75
         scale *= aug_scale
             
         mat_mask = utils.img.get_transform(center, scale, (self.output_res, self.output_res), aug_rot)[:2]
 
         mat = utils.img.get_transform(center, scale, (self.input_res, self.input_res), aug_rot)[:2]
-        inp = cv2.warpAffine(cropped, mat, (self.input_res, self.input_res)).astype(np.float32)/255
+        inp = cv2.warpAffine(cropped, mat, (self.input_res, self.input_res))
         keypoints[:, :, 0:2] = utils.img.kpt_affine(keypoints[:, :, 0:2], mat_mask)
-        if np.random.randint(2) == 0:
-            inp = self.preprocess(inp)
-            inp = inp[:, ::-1]     # flip
-            keypoints = keypoints[:, ds.flipped_parts['tooth']]
-            keypoints[:, :, 0] = self.output_res - keypoints[:, :, 0]
-            orig_keypoints = orig_keypoints[:, ds.flipped_parts['tooth']]
-            orig_keypoints[:, :, 0] = self.input_res - orig_keypoints[:, :, 0]
+        is_outer = 0
+        for i in range(np.shape(keypoints)[1]):
+            if keypoints[0, i, 0] < 0 or keypoints[0, i, 1] < 0 or keypoints[0, i, 0] > self.output_res or keypoints[0, i, 1] > self.output_res:
+                is_outer = 1
+                break
+        # print("b_outer: ", is_outer)
+        if is_outer:
+            inp = cropped
+            height, width = cropped.shape[0:2]
+            center = np.array((width / 2, height / 2))
+            scale = max(height, width) / 200
+            mat_mask = utils.img.get_transform(center, scale, (self.output_res, self.output_res), 0)[:2]
+            keypoints[:, :, 0:2] = utils.img.kpt_affine(orig_keypoints[:, :, 0:2], mat_mask)
+
+        # print("keypoints", keypoints)
+        # cv2.imshow("inp", inp)
+        # cv2.imwrite("D:/inp.png", inp)
+        # cv2.waitKey(0)
         
-        # # set keypoints to 0 when were not visible initially (so heatmap all 0s)
-        for i in range(np.shape(orig_keypoints)[1]):
-            if kptmp[0, i, 0] == 0 and kptmp[0, i, 1] == 0:
-                keypoints[0, i, 0] = 0
-                keypoints[0, i, 1] = 0
-                orig_keypoints[0, i, 0] = 0
-                orig_keypoints[0, i, 1] = 0
+        inp = inp.astype(np.float32) / 255.0
+
+        # if np.random.randint(2) == 0:
+        #     inp = self.preprocess(inp)
+        #     inp = inp[:, ::-1]     # flip
+        #     keypoints = keypoints[:, ds.flipped_parts['tooth']]
+        #     keypoints[:, :, 0] = self.output_res - keypoints[:, :, 0]
+        #     orig_keypoints = orig_keypoints[:, ds.flipped_parts['tooth']]
+        #     orig_keypoints[:, :, 0] = self.input_res - orig_keypoints[:, :, 0]
+        #
+        # # # set keypoints to 0 when were not visible initially (so heatmap all 0s)
+        # for i in range(np.shape(orig_keypoints)[1]):
+        #     if kptmp[0, i, 0] == 0 and kptmp[0, i, 1] == 0:
+        #         keypoints[0, i, 0] = 0
+        #         keypoints[0, i, 1] = 0
+        #         orig_keypoints[0, i, 0] = 0
+        #         orig_keypoints[0, i, 1] = 0
         
         # # generate heatmaps on outres
         heatmaps = self.generateHeatmap(keypoints)
