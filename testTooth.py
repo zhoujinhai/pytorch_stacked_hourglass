@@ -19,7 +19,11 @@ def post_process(det, mat_, trainval, r_x, r_y, resolution=None):
     mat = np.linalg.pinv(np.array(mat_).tolist() + [[0, 0, 1]])[:2]
     res = det.shape[1:3]
     n = resolution[0] / res[0]
+    # for i in range(det.shape[0]):
+    #     print(i, np.unravel_index(det[i].argmax(), det[i].shape))
+    print("det: ", det.shape)
     cropped_preds = parser.parse(np.float32([det]))[0]
+    # print("crop_preds: ", cropped_preds)
 
     if len(cropped_preds) > 0:
         cropped_preds[:, :, :2] = utils.img.kpt_affine(cropped_preds[:, :, :2] * n, mat)  # size 1x3x3
@@ -48,28 +52,18 @@ def inference(img, func, config, r_x, r_y):
     res = (config['train']['input_res'], config['train']['input_res'])
 
     mat_ = utils.img.get_transform(center, scale, res)[:2]
-    inp = img / 255
+    cv2.imshow("inp", img)
+    cv2.waitKey(0)
+    inp = img / 255.0
 
     def array2dict(tmp):
         return {
             'det': tmp[0][:, :, :3],
         }
 
-    tmp1 = array2dict(func([inp]))
-    tmp2 = array2dict(func([inp[:, ::-1]]))
-    tmp = {}
-    for ii in tmp1:
-        tmp[ii] = np.concatenate((tmp1[ii], tmp2[ii]), axis=0)
-    det = tmp['det'][0, -1] + tmp['det'][1, -1, :, :, ::-1][ds.flipped_parts['tooth']]
-    if det is None:
-        return [], []
-    det = det / 2
+    out = array2dict(func([inp]))
 
-    det = np.minimum(det, 1)
-
-    post_process(np.minimum(tmp1['det'][0, -1], 1), mat_, 'valid', r_x, r_y, res)
-    post_process(np.minimum(tmp2['det'][0, -1], 1), mat_, 'valid', r_x, r_y, res)
-    return post_process(det, mat_, 'valid', r_x, r_y, res)
+    return post_process(np.minimum(out['det'][0, -1], 1), mat_, 'valid', r_x, r_y, res)
 
 
 def mpii_eval(pred, gt, normalizing, num_train, bound=0.5):
@@ -163,7 +157,7 @@ def get_img(config):
         img_name, kp, vis = tooth.getAnnots(i)
         print(img_name, kp)
         # # img
-        orig_img = cv2.imread(os.path.join(ds.img_dir, img_name))[:, :, ::-1]
+        orig_img = cv2.imread(os.path.join(ds.img_dir, img_name))  # [:, :, ::-1]
         im = cv2.resize(orig_img, (input_res, input_res))
 
         # # kp
