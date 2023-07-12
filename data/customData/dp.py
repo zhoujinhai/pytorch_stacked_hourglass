@@ -11,7 +11,7 @@ class GenerateHeatmap(object):
     def __init__(self, output_res, num_parts):
         self.output_res = output_res
         self.num_parts = num_parts
-        sigma = self.output_res/64
+        sigma = 3  # self.output_res/64
         self.sigma = sigma
         size = 6*sigma + 3
         x = np.arange(0, size, 1, float)
@@ -63,7 +63,7 @@ class Dataset(torch.utils.data.Dataset):
         orig_keypoints = ds.get_kps(idx)
         kptmp = orig_keypoints.copy()
         cropped = cv2.resize(orig_img, (self.input_res, self.input_res))
-        cv2.imshow("crop", cropped)
+        # cv2.imshow("crop", cropped)
         for i in range(np.shape(orig_keypoints)[1]):
             if orig_keypoints[0, i, 0] > 0:
                 orig_keypoints[0, i, 0] = int(orig_keypoints[0, i, 0] / orig_img.shape[1] * self.input_res)
@@ -88,7 +88,7 @@ class Dataset(torch.utils.data.Dataset):
         keypoints[:, :, 0:2] = utils.img.kpt_affine(keypoints[:, :, 0:2], mat_mask)
         is_outer = 0
         for i in range(np.shape(keypoints)[1]):
-            if keypoints[0, i, 0] < 0 or keypoints[0, i, 1] < 0 or keypoints[0, i, 0] > self.output_res or keypoints[0, i, 1] > self.output_res:
+            if keypoints[0, i, 0] < 0 or keypoints[0, i, 1] < 0 or keypoints[0, i, 0] >= self.output_res or keypoints[0, i, 1] >= self.output_res:
                 is_outer = 1
                 break
         # print("b_outer: ", is_outer)
@@ -104,7 +104,7 @@ class Dataset(torch.utils.data.Dataset):
         # cv2.imshow("inp", inp)
         # cv2.imwrite("D:/inp.png", inp)
         # cv2.waitKey(0)
-        
+
         inp = inp.astype(np.float32) / 255.0
 
         # if np.random.randint(2) == 0:
